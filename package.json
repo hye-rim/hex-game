@@ -1,0 +1,14 @@
+{
+  "name": "hex-game",
+  "version": "1.0.0",
+  "description": "컴퓨터와 하거나 방 코드로 친구와 실시간 대결하는 헥스",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  }
+}
