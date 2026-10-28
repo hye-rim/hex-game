@@ -4,6 +4,7 @@
 // 육각형 이웃: 같은 줄의 양옆, 위줄의 (칸, 칸+1), 아랫줄의 (칸-1, 칸)
 const LOGIC_HEX = (() => {
   const SIZES = [7, 9, 11];
+  const EASY_SEE = 0.7, EASY_AIM = 0.5;   // 쉬움: 한 수 승부를 알아챌 확률 · 길을 보고 둘 확률
   const HARD_SLIP = 0.25;            // 어려움도 네 번에 한 번쯤은 쉬움처럼 둔다 (사람이 이길 수 있게)
   const INF = 1e9;
 
@@ -171,10 +172,16 @@ const LOGIC_HEX = (() => {
     if (canSwap(g) && wantSwap(g, level, rng)) return { type: 'swap' };
     if (level === 'hard' && rng() >= HARD_SLIP) return { type: 'place', cell: hardMove(g, g.turn) };
     if (level !== 'hard') {
-      // 쉬움은 한 수 만에 이길 수 있으면 대체로 이긴다 (놓치기도 한다)
-      if (rng() < 0.7) {
-        const board = g.board.slice();
+      const board = g.board.slice();
+      // 쉬움: 한 수 만에 이길 수 있으면 대체로 이기고, 상대가 이기는 자리는 대체로 막는다 (놓치기도 한다)
+      if (rng() < EASY_SEE) {
         for (const i of emptyCells(g)) { board[i] = g.turn + 1; const w = connected(board, g.n, g.turn); board[i] = 0; if (w) return { type: 'place', cell: i }; }
+        for (const i of emptyCells(g)) { board[i] = 2 - g.turn; const w = connected(board, g.n, 1 - g.turn); board[i] = 0; if (w) return { type: 'place', cell: i }; }
+      }
+      // 절반쯤은 길을 보고 둔다: 점수가 높은 세 자리 중 하나 (나머지는 이웃 위주로 무작위)
+      if (rng() < EASY_AIM) {
+        const top = emptyCells(g).map((i) => ({ i, s: score(board, g.n, g.turn, i) })).sort((a, b) => b.s - a.s).slice(0, 3);
+        return { type: 'place', cell: top[Math.floor(rng() * top.length)].i };
       }
     }
     return { type: 'place', cell: easyMove(g, rng) };
