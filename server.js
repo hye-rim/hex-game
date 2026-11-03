@@ -372,7 +372,7 @@ wss.on('connection', (ws, req) => {
     client.lastSeen = Date.now();
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    const handler = handlers[msg && msg.t];
+    const handler = msg && typeof msg.t === 'string' && Object.prototype.hasOwnProperty.call(handlers, msg.t) ? handlers[msg.t] : null;
     if (handler) handler(client, msg);
   });
 
