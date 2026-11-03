@@ -68,6 +68,7 @@ let st = null;                      // 컴퓨터 대전 판
 let cpuYou = 0;                     // 컴퓨터 대전에서 내 자리 (0 먼저, 1 나중). 다시 하면 서로 바뀐다
 let room = null, view = null, waitingNet = false, netDown = false, turnEnd = 0, recorded = '', seenMove = 0;
 let cpuTimer = 0, overTimer = 0, thinking = false, bannerTimer = 0;
+let hist = [];                      // 컴퓨터 대전: 내가 두기 직전의 판들 (무르기용)
 let ghost = -1;                     // 터치로 고른(아직 안 놓은) 칸
 let lastCell = -1;                  // 방금 놓은 돌
 const online = () => mode === 'online';
@@ -162,6 +163,8 @@ function renderHud(m = model()) {
     else text = online() ? `${m.names[m.v.turn]} 차례 · ${sec}초` : '컴퓨터 차례…';
   }
   $('turn').textContent = text;
+  $('undoBtn').style.display = !online() && phase === 'play' && st ? '' : 'none';
+  $('undoBtn').disabled = !hist.length;
   $('resignBtn').style.display = online() && room && room.state === 'playing' ? '' : 'none';
 }
 function say(t) { $('msg').textContent = t; }
@@ -195,15 +198,18 @@ board.addEventListener('pointerdown', (e) => {
   say('이 자리에 놓으려면 같은 칸을 한 번 더 눌러요');
 });
 $('swapBtn').onclick = (e) => { e.currentTarget.blur(); const m = model(); if (canAct(m) && m.v.canSwap) dispatch({ type: 'swap' }); };
-addEventListener('keydown', (e) => { if (e.code === 'KeyM') toggleMute(); if (e.code === 'Escape') { ghost = -1; render(); } });
+$('undoBtn').onclick = (e) => { e.currentTarget.blur(); undo(); };
+addEventListener('keydown', (e) => { if (e.code === 'KeyZ' && e.target.tagName !== 'INPUT') undo(); if (e.code === 'KeyM') toggleMute(); if (e.code === 'Escape') { ghost = -1; render(); } });
 
 // 내 동작 하나를 낸다 (컴퓨터 판은 바로 적용, 온라인은 서버로)
 function dispatch(a) {
   const m = model();
   if (!canAct(m)) return;
   if (online()) { waitingNet = true; net.send('act', { action: a }); render(); return; }
+  const before = { st: JSON.parse(JSON.stringify(st)), lastCell };
   const ev = L.apply(st, a);
   if (!ev) return;
+  hist.push(before);
   afterMove(ev, true);
 }
 function afterMove(ev, mine) {
@@ -235,11 +241,21 @@ function announce(ev) {
 function startCpu(level, you = 0) {
   leaveOnline();
   clearTimeout(cpuTimer); clearTimeout(overTimer);
-  mode = level; cpuYou = you; st = L.newGame(setSize, setSwap); phase = 'play'; ghost = -1; thinking = false; turnEnd = 0; lastCell = -1;
+  mode = level; cpuYou = you; st = L.newGame(setSize, setSwap); hist = []; phase = 'play'; ghost = -1; thinking = false; turnEnd = 0; lastCell = -1;
   hideOverlay(); drawBoard(st.n); render();
   const first = you === 0;
   say(`내 돌은 ${SIDE_NAME[you]}색이에요. ${ROLE[you]}를 이으면 이겨요\n${first ? '내가 먼저 놓아요' : '컴퓨터가 먼저 놓아요'}${setSwap ? ' (스왑 규칙 켬)' : ''}`);
   if (!first) scheduleCpu();
+}
+// 무르기: 컴퓨터가 응수한 것까지 포함해 내가 두기 직전으로 돌아간다 (컴퓨터 대전에서만, 판이 끝나기 전까지)
+function undo() {
+  if (online() || phase !== 'play' || !st || !hist.length) return;
+  clearTimeout(cpuTimer); clearTimeout(overTimer); thinking = false;
+  const h = hist.pop();
+  st = h.st; lastCell = h.lastCell; ghost = -1;
+  sfx.ghost();
+  render();
+  say('한 수 물렀어요. 다시 두세요');
 }
 function scheduleCpu() { thinking = true; render(); cpuTimer = setTimeout(cpuTurn, T.cpu); }
 function cpuTurn() {
@@ -519,6 +535,6 @@ if (loadSession()) {
 else showTitle();
 
 /* @test-hooks:start */
-window.__hx = { get st() { return st; }, get mode() { return mode; }, get phase() { return phase; }, get room() { return room; }, get ghost() { return ghost; }, get thinking() { return thinking; }, T, dispatch, startCpu, render, model };
+window.__hx = { get st() { return st; }, get mode() { return mode; }, get phase() { return phase; }, get room() { return room; }, get ghost() { return ghost; }, get thinking() { return thinking; }, T, dispatch, startCpu, render, model , undo, hist: () => hist, showTitle};
 /* @test-hooks:end */
 })();
